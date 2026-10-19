@@ -193,14 +193,18 @@ def search_nearby_malls(
 @function_tool
 def check_brand_in_mall(
     mall_location: Annotated[str, "商场坐标，格式 lng,lat，来自 search_nearby_malls 的结果"],
-    brand: Annotated[str, "要核对的品牌或门店名，例如「倍轻松」「西厅村屋」"],
+    brand: Annotated[str, "要核对的品牌或门店名，例如「倍轻松」「西町村屋」"],
+    mall_name: Annotated[str, "商场名称，用于剔除相邻商场的门店误命中，强烈建议传入"] = "",
     radius: Annotated[int, "认定「位于该商场内」的半径，单位米。默认 300，商场体量大时可放宽到 500"] = 300,
 ) -> str:
     """核对某个商场内是否存在指定品牌的门店。
 
     以商场坐标为圆心做小半径 POI 搜索：命中即认为该品牌在该商场内（高德不提供
     「商场包含哪些店铺」的直接接口，这是行业通用的等效做法）。
-    返回 matched 布尔值、命中的门店名与距离，供 Agent 判断是否满足用户的品牌要求。
+
+    注意：圆形半径会覆盖到隔壁商场，因此当传入 mall_name 时，会用门店地址是否包含
+    商场名做二次校验，把「隔壁商场的门店」标记为 in_this_mall=false 并从 matched 中排除。
+    返回 matched 布尔值、命中的门店名、距离与该门店是否属于本商场，供 Agent 判断。
     """
     params: dict = {
         "location": mall_location,
@@ -215,24 +219,42 @@ def check_brand_in_mall(
     if "error" in data:
         return json.dumps(data, ensure_ascii=False)
 
+    # 商场名去掉常见后缀再比对，避免「合生汇」与「北京朝阳合生汇」这类全称差异
+    needle = (mall_name or "").strip()
+
     hits = []
     for poi in data.get("pois") or []:
+        address = poi.get("address") or ""
+        if needle:
+            in_this_mall = needle in address or needle in (poi.get("name") or "")
+        else:
+            in_this_mall = None  # 未传商场名，无法校验，交给上层自行判断
         hits.append(
             {
                 "name": poi.get("name"),
-                "address": poi.get("address"),
+                "address": address,
                 "distance_m": _to_int(poi.get("distance")),
                 "type": poi.get("type"),
+                "in_this_mall": in_this_mall,
             }
         )
+
+    if needle:
+        matched = any(h["in_this_mall"] for h in hits)
+        nearby_other_mall = [h for h in hits if not h["in_this_mall"]]
+    else:
+        matched = len(hits) > 0
+        nearby_other_mall = []
 
     return json.dumps(
         {
             "brand": brand,
+            "mall_name": needle or None,
             "mall_location": mall_location,
             "radius_m": params["radius"],
-            "matched": len(hits) > 0,
+            "matched": matched,
             "stores": hits,
+            "excluded_other_mall_hits": nearby_other_mall,
         },
         ensure_ascii=False,
     )

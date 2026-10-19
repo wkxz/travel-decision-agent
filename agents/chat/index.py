@@ -58,7 +58,8 @@ agent = Agent(
         "标准流程：\n"
         "1. 用户给出位置和品牌偏好后，先调用 geocode_location 把地点解析成坐标。\n"
         "2. 调用 search_nearby_malls 拿到附近候选商场列表。\n"
-        "3. 按距离从近到远，逐个调用 check_brand_in_mall 核对用户要求的品牌。\n"
+        "3. 按距离从近到远，逐个调用 check_brand_in_mall 核对用户要求的品牌，"
+        "并且必须把商场名称作为 mall_name 一起传入。\n"
         "   只核对最近的 5~8 个即可，不要一次核对全部候选，否则会触发高德接口限流。\n"
         "4. 用 measure_distance 比较满足条件的商场的距离，按由近到远排序。\n"
         "5. 给出推荐，并说明推荐依据：候选商场名称、命中的品牌门店、距离数字。\n"
@@ -72,6 +73,8 @@ agent = Agent(
         "- 信息不足时（例如没说城市、没说清楚品牌名）主动追问，不要默认假设。\n"
         "- 用户要求多个品牌同时满足时，必须全部核对通过才算满足；"
         "如果放宽条件能得到更近的结果，主动告知用户这个取舍。\n"
+        "- check_brand_in_mall 返回的 matched 才是判断依据；"
+        "excluded_other_mall_hits 里的门店属于相邻商场，不能算作本商场有该品牌。\n"
         "- 回答用中文，简洁清晰，先给结论再给依据。"
     ),
     tools=[geocode_location, search_nearby_malls, check_brand_in_mall, measure_distance],
