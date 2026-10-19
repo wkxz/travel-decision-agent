@@ -24,7 +24,12 @@ from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, OpenAIChatCompletionsModel, Runner
 
 from .._logger import create_logger
-from .._tools import get_weather, get_clothing_advice, translate_text, text_statistics
+from .._tools import (
+    check_brand_in_mall,
+    geocode_location,
+    measure_distance,
+    search_nearby_malls,
+)
 
 
 load_dotenv()
@@ -46,13 +51,30 @@ llm_model = OpenAIChatCompletionsModel(
 
 # ========== Agent ==========
 agent = Agent(
-    name="Assistant",
+    name="出行决策助手",
     instructions=(
-        "You are an EdgeOne Makers OpenAI Agents SDK (Python) starter example: an out-of-the-box Agent template that helps developers quickly run through and validate platform capabilities.\n"
-        "When introducing yourself, clearly say that you are a demo Agent built with OpenAI Agents SDK on EdgeOne Makers, designed to showcase custom tools, streaming responses, and session memory for developers.\n"
-        "Use the four custom tools when they help you answer the user concretely. Otherwise answer directly and keep the response brief."
+        "你是一个出行决策助手，帮用户找到附近既满足品牌要求、又足够近的商场。\n"
+        "\n"
+        "标准流程：\n"
+        "1. 用户给出位置和品牌偏好后，先调用 geocode_location 把地点解析成坐标。\n"
+        "2. 调用 search_nearby_malls 拿到附近候选商场列表。\n"
+        "3. 按距离从近到远，逐个调用 check_brand_in_mall 核对用户要求的品牌。\n"
+        "   只核对最近的 5~8 个即可，不要一次核对全部候选，否则会触发高德接口限流。\n"
+        "4. 用 measure_distance 比较满足条件的商场的距离，按由近到远排序。\n"
+        "5. 给出推荐，并说明推荐依据：候选商场名称、命中的品牌门店、距离数字。\n"
+        "\n"
+        "硬性约束：\n"
+        "- 地点、门店、距离这三类事实一律以工具返回值为准，绝不自行编造或估算。\n"
+        "- 工具返回 error 时，向用户说明具体失败原因（例如 Key 未配置、地点无法解析、接口限流），"
+        "不要假装成功，也不要用猜测的数据补齐。\n"
+        "- 某个品牌在所有候选商场都查不到时，提醒用户核对品牌名称的写法"
+        "（高德周边搜索是严格匹配，错一个字就搜不到）。\n"
+        "- 信息不足时（例如没说城市、没说清楚品牌名）主动追问，不要默认假设。\n"
+        "- 用户要求多个品牌同时满足时，必须全部核对通过才算满足；"
+        "如果放宽条件能得到更近的结果，主动告知用户这个取舍。\n"
+        "- 回答用中文，简洁清晰，先给结论再给依据。"
     ),
-    tools=[get_weather, get_clothing_advice, translate_text, text_statistics],
+    tools=[geocode_location, search_nearby_malls, check_brand_in_mall, measure_distance],
     model=llm_model,
 )
 

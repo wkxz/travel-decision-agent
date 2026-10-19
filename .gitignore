@@ -13,6 +13,7 @@ dist/
 .env
 agents-python/.env
 agents-python/chat/.env
+.edgeone-token
 
 # OS
 .DS_Store
@@ -39,3 +40,9 @@ plan/
 # AI assistant local instructions
 CLAUDE.md
 AGENTS.md
+
+# Tencent Cloud EdgeOne
+.env
+.edgeone/*
+.tef_dist/*
+  
